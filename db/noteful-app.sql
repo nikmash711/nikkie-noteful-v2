@@ -1,11 +1,12 @@
 -- 1. I started the server 
 -- 2. I created the database
 -- 3. I created this sql file
--- 4. Connected the db to this file by ruunning psql -U dev -d noteful-app -f /Users/nikkiemashian/Documents/Thinkful/Week-4/Monday/noteful-app.sql
+-- 4. Connected the db to this file by running psql -U dev -d noteful-app -f /Users/nikkiemashian/Documents/Thinkful/Week-4/Monday/noteful-app.sql
 -- Now I can write the commands here and executing them on the command line!
 
 -- All this does is populate the databse - we initilize it here 
 
+-- this only gets run if we run the above command and we mainly using it for testing
 SELECT CURRENT_DATE;
 
 DROP TABLE IF EXISTS notes;

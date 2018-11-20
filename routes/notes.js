@@ -55,6 +55,7 @@ router.get('/:id', (req, res, next) => {
       }
     })
     .catch(err => {
+      err.status = 404;
       next(err);
     });
 });
@@ -113,7 +114,7 @@ router.post('/', (req, res, next) => {
     .into('notes')
     .then(note => {
       if (note) {
-        res.status(201).json(note);
+        res.location(`http://${req.headers.host}/api/notes/${note.id}`).status(201).json(note);
       }
     })
     .catch(err => {
