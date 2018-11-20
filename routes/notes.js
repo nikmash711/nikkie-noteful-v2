@@ -6,31 +6,50 @@ const express = require('express');
 const router = express.Router();
 
 // TEMP: Simple In-Memory Database
-const data = require('../db/notes');
-const simDB = require('../db/simDB');
-const notes = simDB.initialize(data);
+// const data = require('../db/notes');
+// const simDB = require('../db/simDB');
+// const notes = simDB.initialize(data);
 
-// Get All (and search by query)
+//Gonna use our new database now!
+const knex = require('../knex');
+// loads the knex.js file which loads the knexfile.js and returns a connection to the database which is assigned to knex.
+
+
+// accepts a searchTerm and finds notes with titles which contain the term. It returns an array of objects:
 router.get('/', (req, res, next) => {
-  const { searchTerm } = req.query;
+  const searchTerm = req.query.searchTerm;
 
-  notes.filter(searchTerm)
-    .then(list => {
-      res.json(list);
+  knex.select('id', 'title', 'content')
+    .from('notes')
+  //allows us to conditionally add a .where() clause depending on the state of searchterm. If searchTerm exists then find notes where the title is LIKE the searchTerm
+    .modify(function (queryBuilder) {
+      if (searchTerm) {
+        queryBuilder.where('title', 'like', `%${searchTerm}%`);
+      }
+    })
+    .orderBy('notes.id')
+    .then(results => {
+      res.status(200).json(results);
     })
     .catch(err => {
       next(err);
     });
 });
 
-// Get a single item
+
+//Get Note By Id accepts an ID. It returns the note as an object not an array
 router.get('/:id', (req, res, next) => {
   const id = req.params.id;
 
-  notes.find(id)
-    .then(item => {
-      if (item) {
-        res.json(item);
+  //it returns an array, but we want an object 
+  knex
+    .select('id', 'title', 'content')
+    .from('notes')
+    .where('id', `${id}`)
+    .then(note => {
+      if (note[0]) {
+        console.log(note[0]);
+        res.status(200).json(note[0]);
       } else {
         next();
       }
@@ -40,7 +59,7 @@ router.get('/:id', (req, res, next) => {
     });
 });
 
-// Put update an item
+//Update Note By Id accepts an ID and an object with the desired updates. It returns the updated note as an object
 router.put('/:id', (req, res, next) => {
   const id = req.params.id;
 
@@ -61,10 +80,13 @@ router.put('/:id', (req, res, next) => {
     return next(err);
   }
 
-  notes.update(id, updateObj)
-    .then(item => {
-      if (item) {
-        res.json(item);
+  knex
+    .from('notes')
+    .update(updateObj)
+    .where('id', `${id}`)
+    .then(note => {
+      if (note) {
+        res.status(200).json(note);
       } else {
         next();
       }
@@ -74,7 +96,7 @@ router.put('/:id', (req, res, next) => {
     });
 });
 
-// Post (insert) an item
+// accepts an object with the note properties and inserts it in the DB. It returns the new note (including the new id) as an object.
 router.post('/', (req, res, next) => {
   const { title, content } = req.body;
 
@@ -86,10 +108,12 @@ router.post('/', (req, res, next) => {
     return next(err);
   }
 
-  notes.create(newItem)
-    .then(item => {
-      if (item) {
-        res.location(`http://${req.headers.host}/notes/${item.id}`).status(201).json(item);
+  knex
+    .insert(newItem)
+    .into('notes')
+    .then(note => {
+      if (note) {
+        res.status(201).json(note);
       }
     })
     .catch(err => {
@@ -97,11 +121,14 @@ router.post('/', (req, res, next) => {
     });
 });
 
-// Delete an item
+// Delete Note By Id accepts an ID and deletes the note from the DB.
 router.delete('/:id', (req, res, next) => {
   const id = req.params.id;
 
-  notes.delete(id)
+  knex
+    .from('notes')
+    .where('id', `${id}`)
+    .del()
     .then(() => {
       res.sendStatus(204);
     })

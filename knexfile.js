@@ -12,3 +12,5 @@ module.exports = {
     connection: process.env.DATABASE_URL
   }
 };
+
+// The knexfile.js is a knex specific configuration file, you can learn more here. Currently, it contains two environments: "development" and "production". Each environment property has a connection object appropriate to the environment.
