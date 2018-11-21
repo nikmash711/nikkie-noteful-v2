@@ -75,6 +75,10 @@ router.put('/:id', (req, res, next) => {
     }
   });
 
+  if ('folderId' in req.body) {
+    updateObj['folder_id'] = req.body['folderId']; //transformation from what its called in the body vs in the database
+  }
+
   /***** Never trust users - validate input *****/
   if (!updateObj.title) {
     const err = new Error('Missing `title` in request body');
@@ -82,28 +86,37 @@ router.put('/:id', (req, res, next) => {
     return next(err);
   }
 
+  console.log('HERE', updateObj);
   knex
     .from('notes')
     .update(updateObj)
     .where('id', `${id}`)
-    .returning('*')
-    .then(([note]) => {
-      if (note) {
-        res.status(200).json(note); //this repsonse is a number so why is it working 
-      } else {
-        next();
-      }
+    .returning('id')
+    .then(([id]) => {
+      // Using the new id, select the new note and the folder
+      return knex.select('notes.id', 'title', 'content', 'folder_id as folderId', 'folders.name as folderName')
+        .from('notes')
+        .leftJoin('folders', 'notes.folder_id', 'folders.id')
+        .where('notes.id', id);
     })
-    .catch(err => {
-      next(err);
-    });
+    .then(([result]) => {
+      res.status(201).json(result);
+    })
+    .catch(err => next(err));
+
 });
 
 // accepts an object with the note properties and inserts it in the DB. It returns the new note (including the new id) as an object.
 router.post('/', (req, res, next) => {
-  const { title, content } = req.body;
+  const { title, content, folderId } = req.body; // Add `folderId` to object destructure
+  
+  const newItem = {
+    title: title,
+    content: content,
+    folder_id: folderId  // Add `folderId`
+  };
 
-  const newItem = { title, content };
+
   /***** Never trust users - validate input *****/
   if (!newItem.title) {
     const err = new Error('Missing `title` in request body');
@@ -111,20 +124,26 @@ router.post('/', (req, res, next) => {
     return next(err);
   }
 
-  knex
-    .insert(newItem)
+  let noteId;
+
+  // Insert new note, instead of returning all the fields, just return the new `id`
+  knex.insert(newItem)
     .into('notes')
-    .returning('*')
-    .then(([note]) => {
-      if (note) {
-        console.log('the note is:', note);
-        res.location(`http://${req.headers.host}/api/notes/${note.id}`).status(201).json(note);
-      }
+    .returning('id')
+    .then(([id]) => {
+      noteId = id;
+      // Using the new id, select the new note and the folder
+      return knex.select('notes.id', 'title', 'content', 'folder_id as folderId', 'folders.name as folderName')
+        .from('notes')
+        .leftJoin('folders', 'notes.folder_id', 'folders.id')
+        .where('notes.id', noteId);
     })
-    .catch(err => {
-      next(err);
-    });
+    .then(([result]) => {
+      res.location(`${req.originalUrl}/${result.id}`).status(201).json(result);
+    })
+    .catch(err => next(err));
 });
+
 
 // Delete Note By Id accepts an ID and deletes the note from the DB.
 router.delete('/:id', (req, res, next) => {
