@@ -13,22 +13,27 @@ const knex = require('../knex');
 // accepts a searchTerm and finds notes with titles which contain the term. It returns an array of objects:
 router.get('/', (req, res, next) => {
   const searchTerm = req.query.searchTerm;
+  const folderId = req.query.folderId; 
 
-  knex.select('id', 'title', 'content')
+  knex.select('notes.id', 'title', 'content', 'folders.id as folderId', 'folders.name as folderName')
     .from('notes')
-  //allows us to conditionally add a .where() clause depending on the state of searchterm. If searchTerm exists then find notes where the title is LIKE the searchTerm
+    .leftJoin('folders', 'notes.folder_id', 'folders.id')
     .modify(function (queryBuilder) {
       if (searchTerm) {
         queryBuilder.where('title', 'like', `%${searchTerm}%`);
       }
     })
+    //filter the results by a folderId
+    .modify(function (queryBuilder) {
+      if (folderId) {
+        queryBuilder.where('folder_id', folderId);
+      }
+    })
     .orderBy('notes.id')
     .then(results => {
-      res.status(200).json(results);
+      res.json(results);
     })
-    .catch(err => {
-      next(err);
-    });
+    .catch(err => next(err));
 });
 
 
@@ -38,13 +43,14 @@ router.get('/:id', (req, res, next) => {
 
   //it returns an array, but we want an object 
   knex
-    .select('id', 'title', 'content')
+    .select('notes.id', 'title', 'content', 'folders.id as folderId', 'folders.name as folderName')
     .from('notes')
-    .where('id', `${id}`)
-    .then(note => {
-      if (note[0]) {
-        console.log(note[0]);
-        res.status(200).json(note[0]);
+    .leftJoin('folders', 'notes.folder_id', 'folders.id')
+    .where('notes.id', `${id}`)
+    .then(([note]) => {
+      if (note) {
+        console.log(note);
+        res.status(200).json(note);
       } else {
         next();
       }
