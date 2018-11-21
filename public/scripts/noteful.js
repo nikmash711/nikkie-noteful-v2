@@ -198,6 +198,7 @@ const noteful = (function () {
           return api.search('/api/notes', store.currentQuery);
         })
         .then(response => {
+          console.log('the response is', response);
           store.notes = response;
           render();
         });

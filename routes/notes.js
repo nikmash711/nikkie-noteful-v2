@@ -85,9 +85,10 @@ router.put('/:id', (req, res, next) => {
     .from('notes')
     .update(updateObj)
     .where('id', `${id}`)
-    .then(note => {
+    .returning('*')
+    .then(([note]) => {
       if (note) {
-        res.status(200).json(note);
+        res.status(200).json(note); //this repsonse is a number so why is it working 
       } else {
         next();
       }
@@ -112,8 +113,10 @@ router.post('/', (req, res, next) => {
   knex
     .insert(newItem)
     .into('notes')
-    .then(note => {
+    .returning('*')
+    .then(([note]) => {
       if (note) {
+        console.log('the note is:', note);
         res.location(`http://${req.headers.host}/api/notes/${note.id}`).status(201).json(note);
       }
     })
