@@ -17,7 +17,7 @@ router.get('/', (req, res, next) => {
   const searchTerm = req.query.searchTerm;
   const folderId = req.query.folderId; 
   const tagId = req.query.tagId;
-
+  
   knex.select('notes.id', 'title', 'content', 'folders.id as folderId', 'folders.name as folderName',  'tags.id as tagId', 'tags.name as tagName')
     .from('notes')
     .leftJoin('folders', 'notes.folder_id', 'folders.id')
@@ -28,13 +28,13 @@ router.get('/', (req, res, next) => {
         queryBuilder.where('title', 'like', `%${searchTerm}%`);
       }
     })
-    //filter the results by a folderId
+  //filter the results by a folderId
     .modify(function (queryBuilder) {
       if (folderId) {
         queryBuilder.where('folder_id', folderId);
       }
     })
-    //filter the results by a tagId
+  //filter the results by a tagId
     .modify(function (queryBuilder) {
       if (tagId) {
         queryBuilder.where('tag_id', tagId);
@@ -52,7 +52,7 @@ router.get('/', (req, res, next) => {
 //Get Note By Id accepts an ID. It returns the note as an object not an array
 router.get('/:id', (req, res, next) => {
   const noteId = req.params.id;
-
+  
   //it returns an array, but we want an object 
   knex
     .select('notes.id', 'title', 'content', 'folders.id as folderId', 'folders.name as folderName', 'tags.id as tagId', 'tags.name as tagName')
@@ -76,104 +76,120 @@ router.get('/:id', (req, res, next) => {
     });
 });
 
-//Update Note By Id accepts an ID and an object with the desired updates. It returns the updated note as an object
+/* ========== PUT/UPDATE A SINGLE ITEM ========== */
 router.put('/:id', (req, res, next) => {
-  const id = req.params.id;
-
-  /***** Never trust users - validate input *****/
-  const updateObj = {};
-  const updateableFields = ['title', 'content'];
-
-  updateableFields.forEach(field => {
-    if (field in req.body) {
-      updateObj[field] = req.body[field];
-    }
-  });
-
-  if ('folderId' in req.body) {
-    updateObj['folder_id'] = req.body['folderId']; //transformation from what its called in the body vs in the database
-  }
-
-  /***** Never trust users - validate input *****/
-  if (!updateObj.title) {
+  const noteId = req.params.id;
+  const { title, content, folderId, tags = [] } = req.body;
+  
+  /***** Never trust users. Validate input *****/
+  if (!title) {
     const err = new Error('Missing `title` in request body');
     err.status = 400;
     return next(err);
   }
-
-  console.log('HERE', updateObj);
-  knex
-    .from('notes')
-    .update(updateObj)
-    .where('id', `${id}`)
-    .returning('id')
-    .then(([id]) => {
-      // Using the new id, select the new note and the folder
-      return knex.select('notes.id', 'title', 'content', 'folder_id as folderId', 'folders.name as folderName')
-        .from('notes')
-        .leftJoin('folders', 'notes.folder_id', 'folders.id')
-        .where('notes.id', id);
-    })
-    .then(([result]) => {
-      res.status(201).json(result);
-    })
-    .catch(err => next(err));
-
-});
-
-// accepts an object with the note properties and inserts it in the DB. It returns the new note (including the new id) as an object.
-router.post('/', (req, res, next) => {
-  const { title, content, folderId } = req.body; // Add `folderId` to object destructure
   
-  const newItem = {
+  const updateItem = {
     title: title,
     content: content,
-    folder_id: folderId  // Add `folderId`
+    folder_id: (folderId) ? folderId : null
   };
-
-
-  /***** Never trust users - validate input *****/
-  if (!newItem.title) {
-    const err = new Error('Missing `title` in request body');
-    err.status = 400;
-    return next(err);
-  }
-
-  let noteId;
-
-  // Insert new note, instead of returning all the fields, just return the new `id`
-  knex.insert(newItem)
-    .into('notes')
-    .returning('id')
-    .then(([id]) => {
-      noteId = id;
-      // Using the new id, select the new note and the folder
-      return knex.select('notes.id', 'title', 'content', 'folder_id as folderId', 'folders.name as folderName')
+  
+  knex('notes').update(updateItem).where('id', noteId)
+    .then(() => {
+      return knex.del().from('notes_tags').where('note_id', noteId);
+    })
+    .then(() => {
+      const tagsInsert = tags.map(tid => ({ note_id: noteId, tag_id: tid }));
+      return knex.insert(tagsInsert).into('notes_tags');
+    })
+    .then(() => {
+      return knex.select('notes.id', 'title', 'content',
+        'folder_id as folderId', 'folders.name as folderName',
+        'tags.id as tagId', 'tags.name as tagName')
         .from('notes')
         .leftJoin('folders', 'notes.folder_id', 'folders.id')
+        .leftJoin('notes_tags', 'notes.id', 'notes_tags.note_id')
+        .leftJoin('tags', 'tags.id', 'notes_tags.tag_id')
         .where('notes.id', noteId);
     })
-    .then(([result]) => {
-      res.location(`${req.originalUrl}/${result.id}`).status(201).json(result);
-    })
-    .catch(err => next(err));
-});
-
-
-// Delete Note By Id accepts an ID and deletes the note from the DB.
-router.delete('/:id', (req, res, next) => {
-  const id = req.params.id;
-
-  knex
-    .from('notes')
-    .where('id', `${id}`)
-    .del()
-    .then(() => {
-      res.sendStatus(204);
+    .then(result => {
+      if (result) {
+        const [hydrated] = hydrateNotes(result);
+        res.json(hydrated);
+      } else {
+        next();
+      }
     })
     .catch(err => {
       next(err);
     });
 });
 
+// accepts an object with the note properties and inserts it in the DB. It returns the new note (including the new id) as an object.
+router.post('/', (req, res, next) => {
+  const { title, content, folderId, tags } = req.body; // Add `folderId` to object destructure
+  
+  const newItem = {
+    title: title,
+    content: content,
+    folder_id: folderId,
+    tags: tags  // Add `folderId`
+  };
+  
+  
+  /***** Never trust users - validate input *****/
+  if (!newItem.title) {
+    const err = new Error('Missing `title` in request body');
+    err.status = 400;
+    return next(err);
+  }
+  
+  let noteId;
+  
+  // Insert new note into notes table
+  knex.insert(newItem).into('notes').returning('id')
+    .then(([id]) => {
+    // Insert related tags into notes_tags table
+      noteId = id;
+      //converts an array of tagIds in to an array of objects with a note_id and a tag_id
+      const tagsInsert = tags.map(tagId => ({ note_id: noteId, tag_id: tagId }));
+      // inserts them into the notes_tags table
+      return knex.insert(tagsInsert).into('notes_tags');
+    })
+    .then(() => {
+    // Select the new note and leftJoin on folders and tags
+      return knex.select('notes.id', 'title', 'content',
+        'folders.id as folder_id', 'folders.name as folderName',
+        'tags.id as tagId', 'tags.name as tagName')
+        .from('notes')
+        .leftJoin('folders', 'notes.folder_id', 'folders.id')
+        .leftJoin('notes_tags', 'notes.id', 'notes_tags.note_id')
+        .leftJoin('tags', 'tags.id', 'notes_tags.tag_id')
+        .where('notes.id', noteId);
+    })
+    .then(result => {
+      if (result) {
+      // Hydrate the results
+        const hydrated = hydrateNotes(result)[0];
+        // Respond with a location header, a 201 status and a note object
+        res.location(`${req.originalUrl}/${hydrated.id}`).status(201).json(hydrated);
+      } else {
+        next();
+      }
+    })
+    .catch(err => next(err));
+});
+
+/* ========== DELETE/REMOVE A SINGLE ITEM ========== */
+router.delete('/:id', (req, res, next) => {
+  knex.del()
+    .where('id', req.params.id)
+    .from('notes')
+    .then(() => {
+      res.status(204).end();
+    })
+    .catch(err => {
+      next(err);
+    });
+});
 module.exports = router;
