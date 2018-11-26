@@ -9,6 +9,8 @@
 -- this only gets run if we run the above command and we mainly using it for testing
 SELECT CURRENT_DATE;
 
+DROP TABLE IF EXISTS notes_tags;
+DROP TABLE IF EXISTS tags;
 DROP TABLE IF EXISTS notes;
 DROP TABLE IF EXISTS folders;
 -- we run the above so that if the table exists we can delete it and make it again if we're running our commands multiple times 
@@ -85,4 +87,5 @@ INSERT INTO notes (title, content, folder_id) VALUES
 INSERT INTO notes_tags (note_id, tag_id) VALUES
 (1,1),
 (2,2),
+(1,2),
 (3,3);
