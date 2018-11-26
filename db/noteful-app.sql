@@ -1,7 +1,7 @@
 -- 1. I started the server 
 -- 2. I created the database
 -- 3. I created this sql file
--- 4. Connected the db to this file by running psql -U dev -d noteful-app -f /Users/nikkiemashian/Documents/Thinkful/Week-4/Wednesday/nikkie-noteful-v2/db/noteful-app.sql
+-- 4. Connected the db to this file by running psql -U dev -d noteful-app -f /Users/nikkiemashian/Documents/Thinkful/Week-4/Wednesday/many-to-many/nikkie-noteful-v2/db/noteful-app.sql
 -- Now I can write the commands here and executing them on the command line!
 
 -- All this does is populate the databse - we initilize it here 
@@ -20,12 +20,6 @@ CREATE TABLE folders (
     name text NOT NULL
 );
 
-INSERT INTO folders (name) VALUES
-  ('Archive'),
-  ('Drafts'),
-  ('Personal'),
-  ('Work');
-
 -- Create a table: 
 CREATE TABLE notes (
   id serial PRIMARY KEY,
@@ -34,10 +28,31 @@ CREATE TABLE notes (
   created timestamp DEFAULT now(),
   folder_id int REFERENCES folders(id) ON DELETE SET NULL
 );
-  -- the last line is new here:  we want the a note's folder_id to be set to null when the folder is deleted
+
+CREATE TABLE tags (
+  id serial PRIMARY KEY,
+  name text NOT NULL 
+);
+
+CREATE TABLE notes_tags (
+  note_id INTEGER NOT NULL REFERENCES notes ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tags ON DELETE CASCADE
+);
+
 
 -- Bonus: make the id's start from 1000
 -- ALTER SEQUENCE notes_id_seq RESTART WITH 1000;
+
+INSERT INTO folders (name) VALUES
+  ('Archive'),
+  ('Drafts'),
+  ('Personal'),
+  ('Work');
+
+INSERT into tags (name) VALUES
+('cute'),
+('ugly'),
+('smart');
 
 -- Populate with notes: 
 INSERT INTO notes (title, content, folder_id) VALUES 
@@ -67,4 +82,7 @@ INSERT INTO notes (title, content, folder_id) VALUES
     4
   );
 
-
+INSERT INTO notes_tags (note_id, tag_id) VALUES
+(1,1),
+(2,2),
+(3,3);
